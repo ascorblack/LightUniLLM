@@ -2,9 +2,10 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.messages import AIMessage, AIMessageChunk
 from typing import Type, TypeVar, AsyncIterable
 from langchain_openai import ChatOpenAI
+from langchain_ollama import ChatOllama
 from pydantic import BaseModel
 
-from lightunillm.core.subcore.typization import LLMWithStructuredOutput, LLMProvider
+from lightunillm.core.subcore.typization import LLMWithStructuredOutput, LLMProvider, ProviderType, PromptAsyncResult, PromptStatus, LLMTokenUsage
 from lightunillm.core.abstracts.PromptStorageAbstract import PromptStorageAbstract
 from lightunillm.core.interfaces.PromptLoaderInterface import PromptLoaderInterface
 
@@ -12,40 +13,27 @@ T = TypeVar('T', bound=BaseModel)
 
 
 class LLMModel:
-    """Класс для управления моделью ChatOpenAI, включая инициализацию и переключение моделей."""
-    
-    def __init__(self, llm_provider: LLMProvider):
-        """
-        Инициализирует объект LLMModel.
-        
-        Args:
-            llm_provider (LLMProvider): Провайдер модели.
-        """
-        self.llm_provider: LLMProvider = llm_provider
-        self.model: ChatOpenAI = self._initialize_model()
 
-    def _initialize_model(self) -> ChatOpenAI:
+    def __init__(self, llm_provider: LLMProvider):
+        self.llm_provider = llm_provider
+        self.model: ChatOpenAI | ChatOllama = self.get_model()
+
+    def get_model(self) -> ChatOpenAI | ChatOllama:
+        """ Возвращает языковую модель OpenAI
+
+            Returns:
+                ChatOpenAI: инициализированная языковая модель
         """
-        Инициализирует модель ChatOpenAI с текущими параметрами.
         
-        Returns:
-            ChatOpenAI: Инициализированный объект модели.
-        """
-        return ChatOpenAI(
-            api_key=self.llm_provider.api_key,
-            base_url=self.llm_provider.base_url,
-            model=self.llm_provider.model_id
-        )
+        match self.llm_provider.provider:
+            case ProviderType.ollama:
+                return ChatOllama(api_key=self.llm_provider.api_key, base_url=self.llm_provider.base_url, model=self.llm_provider.model_id, num_ctx=20000)
+            case _:
+                return ChatOpenAI(api_key=self.llm_provider.api_key, base_url=self.llm_provider.base_url, model=self.llm_provider.model_id)
 
     def switch_model(self, llm_provider: LLMProvider) -> None:
-        """
-        Обновляет параметры модели и переинициализирует её.
-        
-        Args:
-            llm_provider (LLMProvider): Новый провайдер модели.
-        """
         self.llm_provider = llm_provider
-        self.model = self._initialize_model()
+        self.model = self.get_model()
 
 
 class AIBaseHandler:
@@ -105,12 +93,12 @@ class AIBaseHandler:
         messages = self._prepare_messages(system_message, human_message)
         return await self.llm_model.model.ainvoke(messages)
 
-    async def stream(
+    async def get_llm_stream(
         self,
         human_message: str,
         system_message: str,
         temperature: float = DEFAULT_TEMPERATURE
-    ) -> AsyncIterable[AIMessageChunk]:
+    ) -> AsyncIterable[PromptAsyncResult]:
         """
         Отправляет запрос к модели и возвращает потоковый ответ.
         
@@ -120,12 +108,35 @@ class AIBaseHandler:
             temperature (float, optional): Температура для модели. По умолчанию 0.7.
             
         Returns:
-            AsyncIterable[AIMessageChunk]: Потоковый ответ от модели.
+            AsyncIterable[PromptAsyncResult]: Потоковый ответ от модели.
         """
         self._set_temperature(temperature)
         messages = self._prepare_messages(system_message, human_message)
-        async for chunk in self.llm_model.model.astream(messages, usage_stream=True):
-            yield chunk
+
+        stream = self.llm_model.model.astream(messages)
+
+        is_done: bool = False
+        done_reason: str | None = None
+        async for chunk in stream:
+            chunk: AIMessageChunk
+
+            if not is_done:
+                match self.llm_model.llm_provider.provider:
+                    case ProviderType.ollama:
+                        is_done = chunk.response_metadata.get("done", False)
+                        done_reason = chunk.response_metadata.get("done_reason", None)
+                    case _:
+                        is_done = not not chunk.response_metadata.get("finish_reason", False)
+                        done_reason = chunk.response_metadata.get("finish_reason", None)
+
+            token_usages = LLMTokenUsage.from_message(chunk, self.llm_model.llm_provider.provider, True)
+
+            yield PromptAsyncResult(
+                content=chunk.content,
+                token_usages=[token_usages] if token_usages else [],
+                status=PromptStatus.success if done_reason in ("stop", None) else PromptStatus.error,
+                done=is_done
+            )
 
     async def send_request_with_structured_output(
         self,
@@ -148,11 +159,14 @@ class AIBaseHandler:
         """
         self._set_temperature(temperature)
         messages = self._prepare_messages(system_message, human_message)
+
+        kwargs = {
+            "include_raw": True
+        } | ({} if self.llm_model.llm_provider.provider == ProviderType.ollama else {"strict": True})
         
         response = await self.llm_model.model.with_structured_output(
             output_model,
-            include_raw=True,
-            strict=True
+            **kwargs
         ).ainvoke(messages)
 
         return LLMWithStructuredOutput[output_model](**response)

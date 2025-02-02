@@ -172,3 +172,5 @@ cython_debug/
 
 reinstall.cmd
 reinstall.sh
+
+example/impl/PromptStorage.py

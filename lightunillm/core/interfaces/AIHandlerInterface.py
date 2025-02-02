@@ -1,7 +1,7 @@
-from typing import TypeVar, Generic, Iterable
+from typing import TypeVar, Generic, AsyncIterable
 from abc import ABC, abstractmethod
 
-from lightunillm.core.subcore.typization import PromptSyncResult
+from lightunillm.core.subcore.typization import PromptSyncResult, PromptAsyncResult
 from lightunillm.core.AIBaseHandler import AIBaseHandler
 
 T = TypeVar('T')
@@ -14,5 +14,5 @@ class AIHandlerInterface(AIBaseHandler, ABC, Generic[T]):
         pass
 
     @abstractmethod
-    async def stream(self, *args, **kwargs) -> Iterable[T]:
-        pass 
+    async def stream(self, *args, **kwargs) -> AsyncIterable[PromptAsyncResult[T]]:
+        pass

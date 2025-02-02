@@ -1,5 +1,5 @@
 from lightunillm.core.abstracts.PromptStorageAbstract import PromptStorageAbstract
-from lightunillm.core.subcore.typization import Prompt, LLMProvider
+from lightunillm.core.subcore.typization import Prompt, LLMProvider, ProviderType
 
 class PromptStorage(PromptStorageAbstract):
     async def get_prompt(self, prompt_id: any = None) -> Prompt:
@@ -9,8 +9,18 @@ class PromptStorage(PromptStorageAbstract):
         )
 
     async def get_llm_provider(self, prompt_id: any = None) -> LLMProvider:
-        return LLMProvider(
-            model_id="...",
-            base_url="...",
-            api_key="..."
-        )
+        if prompt_id == 1: # Ollama
+            return LLMProvider(
+                model_id="...",
+                base_url="...",
+                api_key="ollama",
+                provider=ProviderType.ollama
+            )
+        else: # OpenAI
+            return LLMProvider(
+                model_id="openai/gpt-4o-mini",
+                base_url="...",
+                api_key="...",
+                provider=ProviderType.openai
+            )
+

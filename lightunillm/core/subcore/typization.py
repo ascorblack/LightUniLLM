@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, AIMessageChunk
+from pydantic import ValidationError
 from typing import Optional, Any
 from pydantic import BaseModel
 from enum import Enum
@@ -11,11 +12,15 @@ class Prompt(BaseModel):
     system_message: str
 
 
+class ProviderType(str, Enum):
+    openai = "openai"
+    ollama = "ollama"
+
 class LLMProvider(BaseModel):
     model_id: str
     base_url: str
     api_key: str
-
+    provider: ProviderType
 
 class LLMWithStructuredOutput[T](BaseModel):
     raw: AIMessage
@@ -28,17 +33,77 @@ class LLMTokenUsage(BaseModel):
     prompt_tokens: int
     total_tokens: int
     total_cost: Optional[float] = None
-    
-    @staticmethod
-    def from_structured_output(llm_with_structured_output: LLMWithStructuredOutput[Any]) -> LLMTokenUsage:
-        return LLMTokenUsage(**llm_with_structured_output.raw.response_metadata.get("token_usage"))
+    provider: ProviderType
 
     @staticmethod
-    def from_message(message: AIMessage) -> LLMTokenUsage:
-        return LLMTokenUsage(**message.response_metadata.get("token_usage"))
+    def from_structured_output(llm: LLMWithStructuredOutput[Any], provider: ProviderType, is_stream: bool = False) -> LLMTokenUsage | None:
+        try:
+            match provider:
+                case ProviderType.ollama:
+                    usage_metadata = llm.raw.usage_metadata
+
+
+                    if not usage_metadata: return None
+
+                    return LLMTokenUsage(
+                        completion_tokens=usage_metadata.get("output_tokens", 0),
+                        prompt_tokens=usage_metadata.get("input_tokens", 0),
+                        total_tokens=usage_metadata.get("total_tokens", 0),
+                        total_cost=usage_metadata.get("total_cost", 0),
+                        provider=provider
+
+                        )
+                case ProviderType.openai:
+                    if is_stream:
+                        return LLMTokenUsage(
+                            completion_tokens=llm.raw.usage_metadata.get("output_tokens", 0),
+                            prompt_tokens=llm.raw.usage_metadata.get("input_tokens", 0),
+                            total_tokens=llm.raw.usage_metadata.get("total_tokens", 0),
+                            total_cost=llm.raw.usage_metadata.get("total_cost", 0),
+                            provider=provider
+                        )
+                    else:
+                        return LLMTokenUsage(**llm.raw.response_metadata.get("token_usage", {}), provider=provider)
+                case _:
+                    return LLMTokenUsage(**llm.raw.response_metadata.get("token_usage", {}), provider=provider)
+        except (ValidationError, AttributeError, TypeError):
+            return None
+
+
+    @staticmethod
+    def from_message(message: AIMessage, provider: ProviderType, is_stream: bool = False) -> LLMTokenUsage | None:
+        try:
+            match provider:
+                case ProviderType.ollama:
+                    usage_metadata = message.usage_metadata
+
+                    return LLMTokenUsage(
+                        completion_tokens=usage_metadata.get("output_tokens", 0),
+                        prompt_tokens=usage_metadata.get("input_tokens", 0),
+                        total_tokens=usage_metadata.get("total_tokens", 0),
+                        total_cost=usage_metadata.get("total_cost", 0),
+                        provider=provider
+                    )
+                case ProviderType.openai:
+                    if is_stream:
+                        return LLMTokenUsage(
+                            completion_tokens=message.usage_metadata.get("output_tokens", 0),
+                            prompt_tokens=message.usage_metadata.get("input_tokens", 0),
+                            total_tokens=message.usage_metadata.get("total_tokens", 0),
+                            total_cost=message.usage_metadata.get("total_cost", 0),
+                            provider=provider
+                        )
+                    else:
+                        return LLMTokenUsage(**message.response_metadata.get("token_usage", {}), provider=provider)
+                case _:
+                    return LLMTokenUsage(**message.response_metadata.get("token_usage", {}), provider=provider)
+
+        except (ValidationError, AttributeError, TypeError):
+            return None
 
 
 class PromptStatus(str, Enum):
+
     success = "success"
     error = "error"
 
@@ -58,6 +123,21 @@ class PromptSyncResult[T](BaseModel):
 
         return self
 
+class PromptAsyncResult[T](BaseModel):
+    content: Optional[T] = None
+    token_usages: list[LLMTokenUsage] = []
+    status: PromptStatus = PromptStatus.success
+    done: bool = False
+
+    def __or__(self, other: PromptAsyncResult[T]) -> PromptAsyncResult[T]:
+        if isinstance(other, PromptAsyncResult):
+            self.token_usages.extend(other.token_usages)
+            if self.status == PromptStatus.success and other.status == PromptStatus.success:
+                self.content += other.content
+
+        return self
+
+
 
 __all__ = [
     "Prompt",
@@ -65,5 +145,6 @@ __all__ = [
     "LLMWithStructuredOutput",
     "LLMTokenUsage",
     "PromptStatus",
-    "PromptSyncResult"
+    "PromptSyncResult",
+    "PromptAsyncResult"
 ]
