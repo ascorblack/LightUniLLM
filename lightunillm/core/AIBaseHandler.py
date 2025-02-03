@@ -14,9 +14,9 @@ T = TypeVar('T', bound=BaseModel)
 
 class LLMModel:
 
-    def __init__(self, llm_provider: LLMProvider):
+    def __init__(self, llm_provider: LLMProvider | None = None):
         self.llm_provider = llm_provider
-        self.model: ChatOpenAI | ChatOllama = self.get_model()
+        self.model: ChatOpenAI | ChatOllama | None = self.get_model() if llm_provider else None
 
     def get_model(self) -> ChatOpenAI | ChatOllama:
         """ Возвращает языковую модель OpenAI
@@ -27,7 +27,7 @@ class LLMModel:
         
         match self.llm_provider.provider:
             case ProviderType.ollama:
-                return ChatOllama(api_key=self.llm_provider.api_key, base_url=self.llm_provider.base_url, model=self.llm_provider.model_id, num_ctx=20000)
+                return ChatOllama(api_key=self.llm_provider.api_key, base_url=self.llm_provider.base_url, model=self.llm_provider.model_id, num_ctx=self.llm_provider.num_ctx)
             case _:
                 return ChatOpenAI(api_key=self.llm_provider.api_key, base_url=self.llm_provider.base_url, model=self.llm_provider.model_id)
 
@@ -41,7 +41,7 @@ class AIBaseHandler:
     
     DEFAULT_TEMPERATURE = 0.7
 
-    def __init__(self, prompt_storage: PromptStorageAbstract, llm_provider: LLMProvider, *args, **kwargs):
+    def __init__(self, prompt_storage: PromptStorageAbstract, llm_provider: LLMProvider | None = None, *args, **kwargs):
         """
         Инициализирует объект AIHandler.
         
@@ -77,7 +77,20 @@ class AIBaseHandler:
         """
         self.llm_model.model.temperature = temperature
 
-    async def send_request(self, human_message: str, system_message: str, temperature: float = DEFAULT_TEMPERATURE) -> AIMessage:
+    def _set_num_ctx(self, num_ctx: int) -> None:
+        """
+        Устанавливает количество контекста для модели.
+        
+        Args:
+            num_ctx (int): Значение количества контекста для модели.
+        """
+        match self.llm_model.llm_provider.provider:
+            case ProviderType.ollama:
+                self.llm_model.model.num_ctx = num_ctx
+            case _:
+                pass
+
+    async def send_request(self, human_message: str, system_message: str, temperature: float = DEFAULT_TEMPERATURE, num_ctx: int = 2048) -> AIMessage:
         """
         Отправляет запрос к модели и возвращает ответ.
         
@@ -89,8 +102,11 @@ class AIBaseHandler:
         Returns:
             AIMessage: Ответ от модели.
         """
+        self._set_num_ctx(num_ctx)
         self._set_temperature(temperature)
+
         messages = self._prepare_messages(system_message, human_message)
+
         return await self.llm_model.model.ainvoke(messages)
 
     async def get_llm_stream(

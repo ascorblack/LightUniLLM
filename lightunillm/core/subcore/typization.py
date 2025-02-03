@@ -21,6 +21,7 @@ class LLMProvider(BaseModel):
     base_url: str
     api_key: str
     provider: ProviderType
+    num_ctx: int = 2048
 
 class LLMWithStructuredOutput[T](BaseModel):
     raw: AIMessage
