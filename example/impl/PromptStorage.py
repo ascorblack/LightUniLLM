@@ -1,5 +1,5 @@
-from lightunillm.core.abstracts.PromptStorageAbstract import PromptStorageAbstract
-from lightunillm.core.subcore.typization import Prompt, LLMProvider, ProviderType
+from lightunillm import PromptStorageAbstract
+from lightunillm.typization import Prompt, LLMProvider, ProviderType
 
 class PromptStorage(PromptStorageAbstract):
     async def get_prompt(self, prompt_id: any = None) -> Prompt:
@@ -18,9 +18,9 @@ class PromptStorage(PromptStorageAbstract):
             )
         else: # OpenAI
             return LLMProvider(
-                model_id="openai/gpt-4o-mini",
-                base_url="...",
-                api_key="...",
+                model_id="stelterlab/Mistral-Small-24B-Instruct-2501-AWQ",
+                base_url="http://192.168.88.244:9000/v1",
+                api_key="vllm",
                 provider=ProviderType.openai
             )
 

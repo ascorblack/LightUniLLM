@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from lightunillm.core.subcore.typization import Prompt, LLMProvider
+from lightunillm.typization import Prompt, LLMProvider
 
 class PromptStorageAbstract(ABC):
     @abstractmethod

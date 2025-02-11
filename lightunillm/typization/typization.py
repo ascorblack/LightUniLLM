@@ -132,8 +132,7 @@ class PromptAsyncResult[T](BaseModel):
 
     def __or__(self, other: PromptAsyncResult[T]) -> PromptAsyncResult[T]:
         if isinstance(other, PromptAsyncResult):
-            self.token_usages.extend(other.token_usages)
-            if self.status == PromptStatus.success and other.status == PromptStatus.success:
+            if self.status == PromptStatus.success == other.status:
                 self.content += other.content
 
         return self

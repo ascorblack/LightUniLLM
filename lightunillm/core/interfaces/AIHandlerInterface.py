@@ -1,7 +1,7 @@
 from typing import TypeVar, Generic, AsyncIterable
 from abc import ABC, abstractmethod
 
-from lightunillm.core.subcore.typization import PromptSyncResult, PromptAsyncResult
+from lightunillm.typization import PromptSyncResult, PromptAsyncResult
 from lightunillm.core.AIBaseHandler import AIBaseHandler
 
 T = TypeVar('T')

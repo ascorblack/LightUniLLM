@@ -1,1 +1,5 @@
-import lightunillm.core.abstracts as abstracts
+from lightunillm.core.abstracts.PromptStorageAbstract import PromptStorageAbstract
+
+__all__ = [
+    "PromptStorageAbstract"
+]

@@ -5,9 +5,9 @@ from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
 from pydantic import BaseModel
 
-from lightunillm.core.subcore.typization import LLMWithStructuredOutput, LLMProvider, ProviderType, PromptAsyncResult, PromptStatus, LLMTokenUsage
+from lightunillm.typization import LLMWithStructuredOutput, LLMProvider, ProviderType, PromptAsyncResult, PromptStatus, LLMTokenUsage
 from lightunillm.core.abstracts.PromptStorageAbstract import PromptStorageAbstract
-from lightunillm.core.interfaces.PromptLoaderInterface import PromptLoaderInterface
+from lightunillm.utils.PromptLoader import PromptLoader
 
 T = TypeVar('T', bound=BaseModel)
 
@@ -50,7 +50,7 @@ class AIBaseHandler:
             **kwargs: Ключевые аргументы для передачи в LLMModel.
         """
         self.llm_model = LLMModel(llm_provider)
-        self.prompt_loader = PromptLoaderInterface(prompt_storage)
+        self.prompt_loader = PromptLoader(prompt_storage)
 
     def _prepare_messages(self, system_content: str, human_content: str) -> list:
         """

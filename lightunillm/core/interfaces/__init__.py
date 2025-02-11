@@ -1,1 +1,6 @@
-import lightunillm.core.interfaces as interfaces
+from lightunillm.core.interfaces.AIHandlerInterface import AIHandlerInterface
+
+
+__all__ = [
+    "AIHandlerInterface"
+]

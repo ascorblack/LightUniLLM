@@ -1,10 +1,10 @@
 from jinja2 import Template
 
-from lightunillm.core.subcore.typization import LLMProvider, Prompt
+from lightunillm.typization import LLMProvider, Prompt
 from lightunillm.core.abstracts.PromptStorageAbstract import PromptStorageAbstract
 
 
-class PromptLoaderInterface:
+class PromptLoader:
     def __init__(self, prompt_storage: PromptStorageAbstract):
         self.prompt_storage: PromptStorageAbstract = prompt_storage
 
